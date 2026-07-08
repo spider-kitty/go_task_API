@@ -23,3 +23,9 @@ type UpdateTaskRequest struct {
 	Status      string `json:"status"`
 	Category    string `json:"category"`
 }
+
+type TaskFilter struct {
+	Status   string
+	Category string
+	Search   string
+}

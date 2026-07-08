@@ -40,7 +40,20 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetTasks(w http.ResponseWriter, r *http.Request) {
-	tasks := h.service.GetTasks()
+
+	filter := TaskFilter{
+		Status:   strings.TrimSpace(r.URL.Query().Get("status")),
+		Category: strings.TrimSpace(r.URL.Query().Get("category")),
+		Search:   strings.TrimSpace(r.URL.Query().Get("search")),
+	}
+
+	tasks, err := h.service.GetTasks(filter)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, tasks)
 }
