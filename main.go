@@ -34,6 +34,19 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handler.GetTaskByID(w, r)
+		case http.MethodDelete:
+			handler.RemoveTaskByID(w, r)
+		case http.MethodPut:
+			handler.UpdateTaskByID(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+
 	log.Println("server started on :8080")
 
 	err := http.ListenAndServe(":8080", mux)
