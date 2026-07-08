@@ -1,5 +1,13 @@
 package task
 
+type Repository interface {
+	Create(task Task) Task
+	GetAll() []Task
+	GetByID(id int) (Task, bool)
+	UpdateTask(id int, task Task) (Task, bool)
+	Remove(id int) bool
+}
+
 type MemoryRepository struct {
 	tasks  []Task
 	nextID int
