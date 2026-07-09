@@ -7,7 +7,11 @@ import (
 )
 
 func main() {
-	repo := task.NewMemoryRepository()
+	repo, err := task.NewJSONRepository("tasks.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	service := task.NewService(repo)
 	handler := task.NewHandler(service)
 
@@ -49,7 +53,7 @@ func main() {
 
 	log.Println("server started on :8080")
 
-	err := http.ListenAndServe(":8080", mux)
+	err = http.ListenAndServe(":8080", mux)
 	if err != nil {
 		log.Fatal(err)
 	}
