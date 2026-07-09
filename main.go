@@ -1,14 +1,36 @@
 package main
 
 import (
-	"go-task-api/internal/task"
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
+
+	"go-task-api/internal/task"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
-	repo, err := task.NewJSONRepository("tasks.json")
+	dsn := os.Getenv("DATABASE_URL")
+
+	if dsn == "" {
+		log.Fatal("DATABASE_URL is not set")
+	}
+
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatal(err)
+	}
+
+	repo := task.NewPostgresRepository(db)
+
+	if err := repo.Migrate(); err != nil {
 		log.Fatal(err)
 	}
 

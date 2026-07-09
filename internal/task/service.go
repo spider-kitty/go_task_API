@@ -46,7 +46,10 @@ func (s *Service) CreateTask(req CreateTaskRequest) (Task, error) {
 		UpdatedAt:   now,
 	}
 
-	createdTask := s.repo.Create(task)
+	createdTask, err := s.repo.Create(task)
+	if err != nil {
+		return Task{}, err
+	}
 
 	return createdTask, nil
 }
@@ -68,7 +71,11 @@ func (s *Service) GetTasks(filter TaskFilter) ([]Task, error) {
 		return []Task{}, err
 	}
 
-	tasks := s.repo.GetAll()
+	tasks, err := s.repo.GetAll()
+	if err != nil {
+		return []Task{}, err
+	}
+
 	var filteredTasks []Task
 
 	search := strings.ToLower(filter.Search)
@@ -96,20 +103,11 @@ func (s *Service) GetTasks(filter TaskFilter) ([]Task, error) {
 }
 
 func (s *Service) GetTaskByID(id int) (Task, error) {
-
-	task, found := s.repo.GetByID(id)
-	if !found {
-		return Task{}, ErrTaskNotFound
-	}
-	return task, nil
+	return s.repo.GetByID(id)
 }
 
 func (s *Service) DeleteTask(id int) error {
-	deleted := s.repo.Remove(id)
-	if !deleted {
-		return ErrTaskNotFound
-	}
-	return nil
+	return s.repo.Remove(id)
 }
 
 func (s *Service) UpdateTask(id int, req UpdateTaskRequest) (Task, error) {
@@ -148,9 +146,9 @@ func (s *Service) UpdateTask(id int, req UpdateTaskRequest) (Task, error) {
 	oldTask.Category = category
 	oldTask.UpdatedAt = time.Now().Format(time.RFC3339)
 
-	updatedTask, found := s.repo.UpdateTask(id, oldTask)
-	if !found {
-		return Task{}, ErrTaskNotFound
+	updatedTask, err := s.repo.UpdateTask(id, oldTask)
+	if err != nil {
+		return Task{}, err
 	}
 
 	return updatedTask, nil
