@@ -2,6 +2,8 @@ package task
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,19 +22,15 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var req CreateTaskRequest
 
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err := decodeJSONBody(r, &req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid request body",
-		})
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	task, err := h.service.CreateTask(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeServiceError(w, err)
 		return
 	}
 
@@ -49,9 +47,7 @@ func (h *Handler) GetTasks(w http.ResponseWriter, r *http.Request) {
 
 	tasks, err := h.service.GetTasks(filter)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeServiceError(w, err)
 		return
 	}
 
@@ -59,36 +55,28 @@ func (h *Handler) GetTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetTaskByID(w http.ResponseWriter, r *http.Request) {
-	id, err := h.GetIDFromPath(r.URL.Path)
+	id, err := getIDFromRequest(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	task, err := h.service.GetTaskByID(id)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
 }
 
 func (h *Handler) RemoveTaskByID(w http.ResponseWriter, r *http.Request) {
-	id, err := h.GetIDFromPath(r.URL.Path)
+	id, err := getIDFromRequest(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	err = h.service.DeleteTask(id)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeServiceError(w, err)
 		return
 	}
 
@@ -98,28 +86,22 @@ func (h *Handler) RemoveTaskByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateTaskByID(w http.ResponseWriter, r *http.Request) {
-	id, err := h.GetIDFromPath(r.URL.Path)
+	id, err := getIDFromRequest(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	var req UpdateTaskRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
+	err = decodeJSONBody(r, &req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid request body",
-		})
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	task, err := h.service.UpdateTask(id, req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		writeServiceError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
@@ -138,4 +120,63 @@ func writeJSON(w http.ResponseWriter, statusCode int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(data)
+}
+
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+func writeError(w http.ResponseWriter, statusCode int, message string) {
+	writeJSON(w, statusCode, ErrorResponse{
+		Error: message,
+	})
+}
+
+func writeServiceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, ErrTaskNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+
+	case errors.Is(err, ErrTitleRequired),
+		errors.Is(err, ErrTitleTooShort),
+		errors.Is(err, ErrTitleTooLong),
+		errors.Is(err, ErrDescriptionTooLong),
+		errors.Is(err, ErrCategoryTooLong),
+		errors.Is(err, ErrInvalidStatus),
+		errors.Is(err, ErrInvalidSearchFilter):
+		writeError(w, http.StatusBadRequest, err.Error())
+
+	default:
+		writeError(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+func decodeJSONBody(r *http.Request, dst any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(dst); err != nil {
+		return ErrInvalidRequestBody
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return ErrInvalidRequestBody
+	}
+
+	return nil
+}
+
+func getIDFromRequest(r *http.Request) (int, error) {
+	idText := strings.TrimSpace(r.PathValue("id"))
+
+	id, err := strconv.Atoi(idText)
+	if err != nil {
+		return 0, ErrInvalidTaskID
+	}
+
+	if id <= 0 {
+		return 0, ErrInvalidTaskID
+	}
+
+	return id, nil
 }

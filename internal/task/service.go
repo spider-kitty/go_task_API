@@ -1,7 +1,6 @@
 package task
 
 import (
-	"errors"
 	"strings"
 	"time"
 )
@@ -18,27 +17,31 @@ func NewService(repo Repository) *Service {
 
 func (s *Service) CreateTask(req CreateTaskRequest) (Task, error) {
 	title := strings.TrimSpace(req.Title)
+	description := strings.TrimSpace(req.Description)
+	category := strings.TrimSpace(req.Category)
 
-	if title == "" {
-		return Task{}, errors.New("title is required")
+	if err := validateTitle(title); err != nil {
+		return Task{}, err
+	}
+	if err := validateDescription(description); err != nil {
+		return Task{}, err
+	}
+	if err := validateCategory(category); err != nil {
+		return Task{}, err
 	}
 
-	status := strings.TrimSpace(req.Status)
-
-	if status == "" {
-		status = "todo"
+	status, err := normalizeStatus(req.Status)
+	if err != nil {
+		return Task{}, err
 	}
 
-	if !isValidStatus(status) {
-		return Task{}, errors.New("invalid status")
-	}
 	now := time.Now().Format(time.RFC3339)
 
 	task := Task{
 		Title:       title,
-		Description: strings.TrimSpace(req.Description),
+		Description: description,
 		Status:      status,
-		Category:    strings.TrimSpace(req.Category),
+		Category:    category,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -53,8 +56,16 @@ func (s *Service) GetTasks(filter TaskFilter) ([]Task, error) {
 	filter.Category = strings.TrimSpace(filter.Category)
 	filter.Search = strings.TrimSpace(filter.Search)
 
-	if filter.Status != "" && !isValidStatus(filter.Status) {
-		return nil, errors.New("invalid status filter: " + filter.Status)
+	if filter.Status != "" {
+		status, err := normalizeStatus(filter.Status)
+		if err != nil {
+			return []Task{}, err
+		}
+		filter.Status = status
+	}
+
+	if err := validateSearchFilter(filter.Search); err != nil {
+		return []Task{}, err
 	}
 
 	tasks := s.repo.GetAll()
@@ -88,7 +99,7 @@ func (s *Service) GetTaskByID(id int) (Task, error) {
 
 	task, found := s.repo.GetByID(id)
 	if !found {
-		return Task{}, errors.New("task not found")
+		return Task{}, ErrTaskNotFound
 	}
 	return task, nil
 }
@@ -96,7 +107,7 @@ func (s *Service) GetTaskByID(id int) (Task, error) {
 func (s *Service) DeleteTask(id int) error {
 	deleted := s.repo.Remove(id)
 	if !deleted {
-		return errors.New("task not found")
+		return ErrTaskNotFound
 	}
 	return nil
 }
@@ -108,33 +119,39 @@ func (s *Service) UpdateTask(id int, req UpdateTaskRequest) (Task, error) {
 	}
 
 	title := strings.TrimSpace(req.Title)
-	if title == "" {
-		return Task{}, errors.New("title is required")
+	description := strings.TrimSpace(req.Description)
+	category := strings.TrimSpace(req.Category)
+
+	if err := validateTitle(title); err != nil {
+		return Task{}, err
+	}
+	if err := validateDescription(description); err != nil {
+		return Task{}, err
+	}
+	if err := validateCategory(category); err != nil {
+		return Task{}, err
 	}
 
-	Status := strings.TrimSpace(req.Status)
-	if Status == "" {
-		req.Status = "Todo"
+	status := strings.TrimSpace(req.Status)
+	if status == "" {
+		status = oldTask.Status
+	} else {
+		status, err = normalizeStatus(status)
+		if err != nil {
+			return Task{}, err
+		}
 	}
 
-	if !isValidStatus(Status) {
-		return Task{}, errors.New("invalid status")
-	}
 	oldTask.Title = title
-	oldTask.Description = strings.TrimSpace(req.Description)
-	oldTask.Status = Status
-	oldTask.Category = strings.TrimSpace(req.Category)
+	oldTask.Description = description
+	oldTask.Status = status
+	oldTask.Category = category
 	oldTask.UpdatedAt = time.Now().Format(time.RFC3339)
 
 	updatedTask, found := s.repo.UpdateTask(id, oldTask)
 	if !found {
-		return Task{}, errors.New("task not found")
+		return Task{}, ErrTaskNotFound
 	}
 
 	return updatedTask, nil
-
-}
-
-func isValidStatus(status string) bool {
-	return status == "todo" || status == "in_progress" || status == "done"
 }
