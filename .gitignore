@@ -1,2 +1,4 @@
 tasks.json
 .env
+*.exe
+.idea/

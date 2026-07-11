@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+tasks.json
+*.exe
+*.log
+
+.vscode
+.idea
+
+README.md
